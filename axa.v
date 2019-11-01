@@ -46,7 +46,7 @@
 
 // state numbers only
 `define Start   6'b111111
-`define INPIPE6'b111110
+`define INPIPE  6'b111110
 `define STxhi   6'b100000
 `define STxlo   6'b101000
 `define STlhi   6'b110000
@@ -74,12 +74,12 @@ module processor(halt, reset, clk);
   reg `WORD ir;
   reg `STATE s;
   integer i = 0;
-  
+
 
   //undo stack trickery
   wire pushpop;
-  wire enable;
-  reg `WORD to_pop;
+  reg enable;
+  wire `WORD to_pop;
   reg `WORD to_push;
   undo_stack undofile(enable,pushpop,to_push,to_pop);
 
@@ -96,15 +96,19 @@ module processor(halt, reset, clk);
   reg `BUFSRCTYPE srcType2;
   reg `BUF16 destFull2;
 
+  // BUFFER FIELDS FOR MEMORY READ/WRITE OUTPUT, ALU INPUT
   reg `BUFOP op3;
+  reg `BUFDADDR daddr3;
+  reg `BUF16 srcFull3;
+  reg `BUF16 destFull3;
 
-  //BUFFER FIELDS FOR ALU OUTPUT, REG WRITE INPUT 
+  //BUFFER FIELDS FOR ALU OUTPUT, REG WRITE INPUT
   reg `BUFOP op4;
   reg `BUF16 result4;
   reg `BUFDADDR daddr4;
   reg is_zero;
   reg is_neg;
-  
+
   //BUFFER FIELDS FOR REG WRITE OUTPUT, LOAD/DECODE INPUT
   reg branchTaken;
   reg `BR_TARGET branchTarget;
@@ -143,19 +147,34 @@ module processor(halt, reset, clk);
     srcType2 <= srcType1;
     op2 <= op1;
     case (srcType1)
-      `SRC_UNDO: begin srcType2 <= undofile[src1];end
-      `SRC_REG: begin srcType2 <= regfile[src1];end
-      `SRC_ADDR: begin srcType2 <= regfile[src1];end
+    // TODO: Align this with the current undo buffer implementation
+      `SRC_UNDO: begin srcFull2 <= undofile[src1];end
+      `SRC_REG:  begin srcFull2 <= regfile[src1];end
+      `SRC_ADDR: begin srcFull2 <= regfile[src1];end
       // this is the 2's compliment conversion, I am sure it does not need to be at the bit level but I really dont like bugs.
-      `SRC_I4: begin srcType2 <= src1[3] ? {12'b111111111111, (src1 ^ 4'b1111) + 4'b0001} : {12'b000000000000, src1};end
+      `SRC_I4: begin srcFull2 <= src1[3] ? {12'b111111111111, (src1 ^ 4'b1111) + 4'b0001} : {12'b000000000000, src1};end
     endcase
   end
 
-  //ALU 
+  // MEMORY READ/WRITE
   always @(posedge clk) begin
-    // needed to store undobuff before write
+      op3 <= op2;
+      daddr3 <= daddr2;
+      destFull3 <= destFull2;
+
+      if(srcType2 == `SRC_ADDR)
+        srcFull3 <= datamem[srcFull2];
+      else
+        srcFull3 <= srcFull2;
+
+      if(op2 == `OPex) datamem[srcFull2] <= destFull2;
+  end
+
+  //ALU
+  always @(posedge clk) begin
+    // needed to store dest value in undobuff before write
     case (op3)
-      OPadd , OPsub , OPxor , OPex  , OProl , OPshr , OPor  , OPand , OPdup : begin
+      `OPlhi, `OPllo, `OPshr, `OPor, `OPand , `OPdup : begin
         while (enable == 1)
           begin
             #1;
@@ -164,20 +183,46 @@ module processor(halt, reset, clk);
         enable <= 1;
       end
     endcase
+
+    // Another case statement for op3- this time for actual operations. Having
+    // two seperate case statements saves us repeating the push process
+    case(op3)
+        `OPxhi: result4 <= destFull3 ^ (srcFull3 << 8);
+        `OPxlo: result4 <= destFull3 ^ srcFull3;
+        `OPlhi: result4 <= srcFull3 << 8;
+        `OPllo: result4 <= {{8{srcFull3[15]}},srcFull3}; // sign extend immediate to 16-bits
+        `OPadd: result4 <= destFull3 + srcFull3;
+        `OPsub: result4 <= destFull3 - srcFull3;
+        `OPxor: result4 <= destFull3 ^ srcFull3;
+        `OProl: begin
+                temp = destFull3 << srcFull3;
+                result4 <= temp | destFull3 >> (16- srcFull3);
+                end
+        `OPshr: result4 <= destFull3 >> srcFull3;
+        `OPor:  result4 <= destFull3 | srcFull3;
+        `OPand: result4 <= destFull3 & srcFull3;
+        `OPdup: result4 <= srcFull3;
+        default: result4 <= destFull3;
+    endcase
+
+    if(result4[15] == 1) is_neg <= 1;
+    if(result4 == 0) is_zero <= 1;
+    daddr4 <= daddr3;
+    op3 <= op4;
   end
-  
+
 
   //REGISTER WRITE
   always @(posedge clk) begin
     case (op4)
-      OPadd , OPsub , OPxor , OPex  , OProl , OPshr , OPor  , OPand , OPdup : begin
+      `OPadd , `OPsub , `OPxor , `OPex  , `OProl , `OPshr , `OPor  , `OPand , `OPdup : begin
         daddr4 <= result4;
-      end 
+      end
       // where are we pushing the pc for these?
-      OPbjz: begin  bjTaken<=is_zero; end
-      OPbjnz: begin bjTaken<=~is_zero;end
-      OPbjn:  begin bjTaken<=is_neg;end
-      OPbjnn:  begin bjTaken<=~is_neg;end
+      `OPbjz:    begin  bjTaken <=  is_zero; end
+      `OPbjnz:   begin  bjTaken <= ~is_zero; end
+      `OPbjn:    begin  bjTaken <=  is_neg;  end
+      `OPbjnn:   begin  bjTaken <= ~is_neg;  end
     endcase
   end
 
@@ -218,16 +263,16 @@ module undo_stack(enable,R_W,PUSH,POP);
   reg [15:0] POP;
   wire R_W;
 
-  reg [15:0] temp[0:15];
+  reg [15:0] undoTemp[0:15];
   integer tos = 15;
 
   always @(posedge enable)
   if(R_W == 1 && tos != 3) begin
-    POP = temp[tos];
+    POP = undoTemp[tos];
     tos = tos + 1;
   end
   else if(R_W == 0 && tos != 0) begin
-    temp[tos] = PUSH; 
+    undoTemp[tos] = PUSH;
     tos = tos - 1;
   end
 endmodule
