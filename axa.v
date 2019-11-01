@@ -75,13 +75,12 @@ module processor(halt, reset, clk);
   reg `STATE s;
   integer i = 0;
 
-
-  //undo stack trickery
-  wire pushpop;
-  reg enable;
-  wire `WORD to_pop;
-  reg `WORD to_push;
-  undo_stack undofile(enable,pushpop,to_push,to_pop);
+  integer undo_sp =0;
+  reg `WORD undofile `REGSIZE;
+  reg `WORD toPushPC;
+  reg `Word toPushDest;
+  reg newPushDest;
+  reg newPushPC;
 
   //BUFFER FIELDS FOR LOAD/DECODE OUTPUT, REGISTER READ INPUT
   reg `BUFOP op1;
@@ -122,8 +121,11 @@ module processor(halt, reset, clk);
     $readmemh0(regfile);
     $readmemh1(datamem);
     $readmemh2(instmem);
-    for(i = 0; i < 16; i = i + 1) begin
+    for(i = 0; i <= `REGSIZE; i = i + 1) begin
       $dumpvars(0, regfile[i]);
+    end
+    for(i = 0; i <= `REGSIZE; i = i + 1) begin
+      undofile[i] <= 0;
     end
   end
 
@@ -136,7 +138,7 @@ module processor(halt, reset, clk);
     src1 <= instmem[pc] `SRC;
     srcType1 <= instmem[pc] `SRCTYPE;
     daddr1 <= instmem[pc] `DEST;
-    if(instmem[pc] `OP_6 == `OPsys) begin halt <= 1; end
+    if(instmem[pc] `OP_6 == `OPsys) halt <= 1;
     pc <= pc+1;
   end
 
@@ -175,12 +177,8 @@ module processor(halt, reset, clk);
     // needed to store dest value in undobuff before write
     case (op3)
       `OPlhi, `OPllo, `OPshr, `OPor, `OPand , `OPdup : begin
-        while (enable == 1)
-          begin
-            #1;
-          end
-        to_push <= destFull3;
-        enable <= 1;
+         toPushDest <= destFull3;
+         newPushDest <= 1;
       end
     endcase
 
@@ -219,13 +217,23 @@ module processor(halt, reset, clk);
         daddr4 <= result4;
       end
       // where are we pushing the pc for these?
-      `OPbjz:    begin  bjTaken <=  is_zero; end
-      `OPbjnz:   begin  bjTaken <= ~is_zero; end
-      `OPbjn:    begin  bjTaken <=  is_neg;  end
-      `OPbjnn:   begin  bjTaken <= ~is_neg;  end
+      `OPbjz:    begin  jumpTaken <=  is_zero; end
+      `OPbjnz:   begin  jumpTaken <= ~is_zero; end
+      `OPbjn:    begin  jumpTaken <=  is_neg;  end
+      `OPbjnn:   begin  jumpTaken <= ~is_neg;  end
     endcase
   end
 
+  // Manage undo buffer
+  always @(posedge clk) begin
+    if(newPushDest) begin
+        undofile[undo_sp] <= toPushDest;
+        undo_sp = undo_sp +1;
+    end
+    if(newPushPC) begin
+        undofile[undo_sup]<= toPushPC;
+        undo_sp = undo_sp +1;
+  end
 
   always @(posedge clk) begin
     enable <= 0;
@@ -247,32 +255,5 @@ module testbench;
       #10 clk = 0;
     end
     $finish;
-  end
-endmodule
-
-
-// credit to gambhirprateek on https://stackoverflow.com/questions/37916758/trying-to-implement-a-stack-in-verilog-whats-wrong-with-the-code
-module undo_stack(enable,R_W,PUSH,POP);
-
-  input enable;
-  input [15:0] PUSH;
-  input  R_W;
-  output [15:0] POP;
-
-  wire [15:0] PUSH;
-  reg [15:0] POP;
-  wire R_W;
-
-  reg [15:0] undoTemp[0:15];
-  integer tos = 15;
-
-  always @(posedge enable)
-  if(R_W == 1 && tos != 3) begin
-    POP = undoTemp[tos];
-    tos = tos + 1;
-  end
-  else if(R_W == 0 && tos != 0) begin
-    undoTemp[tos] = PUSH;
-    tos = tos - 1;
   end
 endmodule
