@@ -154,7 +154,7 @@ module processor(halt, reset, clk);
 
         // Special case instructions: sys, land
         if(op1 == `OPsys) begin halt <= 1; end
-        if((op == `OPbjn) | (op == `OPbjnn) | (op == `OPbjz) | (op == `OPbjnz)) begin control_dependency <= 1; end
+        if((op1 == `OPbjn) | (op1 == `OPbjnn) | (op1 == `OPbjz) | (op1 == `OPbjnz)) begin control_dependency <= 1; end
         if(op1 == `OPland) begin to_push = lastPC; pushpop = 0; undo_enable <= 1; end
         lastPC <= pc;
 
