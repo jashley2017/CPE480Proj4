@@ -37,6 +37,7 @@
 `define OPsys   6'b000000
 `define OPcom   6'b000001
 `define fail    6'b001111
+`define noOP    6'b000001
 
 //8-bit immediate instruction opcodes
 `define OPxhi   4'b1000
@@ -73,6 +74,7 @@ module processor(halt, reset, clk);
   reg `WORD pc = 0;
   reg `WORD ir;
   reg `STATE s;
+  reg dataDependency =  0;
   integer i = 0;
 
 
@@ -112,7 +114,7 @@ module processor(halt, reset, clk);
   reg is_neg;
 
   //BUFFER FIELDS FOR REG WRITE OUTPUT, LOAD/DECODE INPUT
-  reg bjTaken;
+  reg  bjTaken;
   reg `BUFSRCTYPE bjSrcType;
   reg `BJ_TARGET bjTarget;
 
@@ -245,6 +247,24 @@ module processor(halt, reset, clk);
 
   always @(posedge clk) begin
     enable <= 0;
+  end
+
+  always @(posedge clk) begin
+    //check for data dependencies after register read STAGE
+    //only throw a data dependency if daddr matches or src matches a later daddr and src is a reg type
+    if((
+      (|(daddr1^daddr2))|
+      (|(daddr1^daddr3))|
+      (|(daddr1^daddr4))|
+      (|(daddr1^daddr5)))|
+        ((|(src1^daddr2))|
+        (|(src1^daddr3))|
+        (|(src1^daddr4))|
+        (|(src1^daddr5)))) begin
+        if((srcType1 == 0)|(srcType1 == 2))begin
+          dataDependency <= 1;
+        end
+    end
   end
 endmodule
 
