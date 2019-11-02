@@ -149,7 +149,8 @@ module processor(halt, reset, clk);
             pc <= pc + bjTarget;
         else  // jump
             pc <= bjTarget;
-    else
+    end
+    else begin
         pc <= pc+1;
     end
   end
