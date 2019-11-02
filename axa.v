@@ -171,8 +171,7 @@ module processor(halt, reset, clk);
     srcType2 <= srcType1;
     op2 <= op1;
     case (srcType1)
-    // TODO: Align this with the current undo buffer implementation
-      `SRC_UNDO: begin srcFull2 <= undofile[src1];end
+      `SRC_UNDO: begin srcFull2 <= undofile[undo_sp- src1];end
       `SRC_REG:  begin srcFull2 <= regfile[src1];end
       `SRC_ADDR: begin srcFull2 <= regfile[src1];end
       // this is the 2's compliment conversion, I am sure it does not need to be at the bit level but I really dont like bugs.
@@ -245,12 +244,12 @@ module processor(halt, reset, clk);
       `OPadd , `OPsub , `OPxor , `OPex  , `OProl , `OPshr , `OPor  , `OPand , `OPdup : begin
         daddr4 <= result4;
       end
-      `OPbjz:    begin  bjTaken <=  is_zero; bjTarget <= result4 end
-      `OPbjnz:   begin  bjTaken <= ~is_zero; bjTarget <= result4 end
-      `OPbjn:    begin  bjTaken <=  is_neg;  bjTarget <= result4 end
-      `OPbjnn:   begin  bjTaken <= ~is_neg;  bjTarget <= result4 end
+      `OPbjz: begin bjTaken <= is_zero; bjTarget <= result4; end
+      `OPbjnz: begin bjTaken <= ~is_zero; bjTarget <= result4; end
+      `OPbjn: begin bjTaken <=  is_neg;  bjTarget <= result4; end
+      `OPbjnn: begin bjTaken <= ~is_neg;  bjTarget <= result4; end
     endcase
-    bjSrcType <= srcType4
+    bjSrcType <= srcType4;
   end
 
   //UNDO STACK HANDLING
