@@ -169,11 +169,14 @@ module processor(halt, reset, clk);
             pc <= pc+1;
         end
     end
+    else begin
+        op2 <= `noOP;
+    end
   end
 
   //REGISTER READ
   always @(posedge clk) begin
-    if(!dataDependency & !control_dependency) begin
+    if(!dataDependency) begin
         destFull2 <= regfile[daddr1];
         daddr2 <= daddr1;
         srcType2 <= srcType1;
@@ -190,7 +193,7 @@ module processor(halt, reset, clk);
 
   // MEMORY READ/WRITE
   always @(posedge clk) begin
-      if(!dataDependency & !control_dependency) begin
+      if(!dataDependency) begin
           op3 <= op2;
           daddr3 <= daddr2;
           destFull3 <= destFull2;
@@ -202,11 +205,14 @@ module processor(halt, reset, clk);
             srcFull3 <= srcFull2;
           if(op2 == `OPex) datamem[srcFull2] <= destFull2;
       end
+      else begin
+        op3 <= `noOP;
+      end
   end
 
   //ALU
   always @(posedge clk) begin
-    if(!dataDependency & !undo_enable & !control_dependency) begin
+    if(!undo_enable) begin
         // needed to store dest value in undobuff before write
         case (op3)
           `OPlhi, `OPllo, `OPshr, `OPor, `OPand , `OPdup : begin
@@ -252,18 +258,16 @@ module processor(halt, reset, clk);
 
   //REGISTER WRITE
   always @(posedge clk) begin
-    if(!dataDependency & !control_dependency) begin
-        case (op4)
-          `OPadd , `OPsub , `OPxor , `OPex  , `OProl , `OPshr , `OPor  , `OPand , `OPdup : begin
-            daddr4 <= result4;
-          end
-          `OPbjz: begin bjTaken <= is_zero; bjTarget <= result4; control_dependency <=0 ; end
-          `OPbjnz: begin bjTaken <= ~is_zero; bjTarget <= result4; control_dependency <= 0; end
-          `OPbjn: begin bjTaken <=  is_neg;  bjTarget <= result4; control_dependency <= 0; end
-          `OPbjnn: begin bjTaken <= ~is_neg;  bjTarget <= result4; control_dependency <= 0; end
-        endcase
-        bjSrcType <= srcType4;
-    end
+    case (op4)
+      `OPadd , `OPsub , `OPxor , `OPex  , `OProl , `OPshr , `OPor  , `OPand , `OPdup : begin
+        daddr4 <= result4;
+      end
+      `OPbjz: begin bjTaken <= is_zero; bjTarget <= result4; control_dependency <=0 ; end
+      `OPbjnz: begin bjTaken <= ~is_zero; bjTarget <= result4; control_dependency <= 0; end
+      `OPbjn: begin bjTaken <=  is_neg;  bjTarget <= result4; control_dependency <= 0; end
+      `OPbjnn: begin bjTaken <= ~is_neg;  bjTarget <= result4; control_dependency <= 0; end
+    endcase
+    bjSrcType <= srcType4;
   end
 
   //UNDO STACK HANDLING
