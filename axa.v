@@ -134,9 +134,17 @@ module processor(halt, reset, clk);
       $dumpvars(0, undofile[i]);
     end
     undo_sp = 0;
-    $readmemh0(regfile);
-    $readmemh1(datamem);
-    $readmemh2(instmem);
+
+    // WEB VERSION
+    // $readmemh0(regfile);
+    // $readmemh1(datamem);
+    // $readmemh2(instmem);
+
+    // LOCAL VERSION
+    $readmemh("reg.vmem", regfile);
+    $readmemh("data.vmem", datamem);
+    $readmemh("instructions.vmem",  instmem);
+
     for(i = 0; i < `NUMREGS; i = i + 1) begin
       $dumpvars(0, regfile[i]);
     end
