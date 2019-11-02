@@ -130,13 +130,13 @@ module processor(halt, reset, clk);
   always @(reset) begin
     halt = 0;
     pc = 0;
-    for(i = undo_sp; undo_sp - i < `NUMREGS; i = i - 1) begin
-      $dumpvars(0, undofile[i]);
-    end
+    //for(i = undo_sp; undo_sp - i < `NUMREGS; i = i - 1) begin
+    //  $dumpvars(0, undofile[i]);
+    //end
     undo_sp = 0;
-    $readmemh0(regfile);
-    $readmemh1(datamem);
-    $readmemh2(instmem);
+    $readmemh("reg.vmem",regfile);
+    $readmemh("data.vmem",datamem);
+    $readmemh("instructions.vmem",instmem);
     for(i = 0; i < `NUMREGS; i = i + 1) begin
       $dumpvars(0, regfile[i]);
     end
@@ -313,7 +313,7 @@ module testbench;
   wire halted;
   processor PE(halted, reset, clk);
   initial begin
-    $dumpfile;
+    $dumpfile("results.vcd");
     $dumpvars(0, PE);
     #10 reset = 1;
     #10 reset = 0;
