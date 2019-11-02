@@ -89,6 +89,7 @@ module processor(halt, reset, clk);
   reg undo_enable;
   reg `WORD to_pop;
   reg `WORD to_push;
+  reg `WORD lastPC;
   integer undo_sp  = 0;
 
 
@@ -154,7 +155,8 @@ module processor(halt, reset, clk);
         // Special case instructions: sys, land
         if(op1 == `OPsys) begin halt <= 1; end
         if((op == `OPbjn) | (op == `OPbjnn) | (op == `OPbjz) | (op == `OPbjnz)) begin control_dependency <= 1; end
-        // if(op1 == `OPland) // PUSH LASTPC
+        if(op1 == `OPland) begin to_push = lastPC; pushpop = 0; undo_enable <= 1; end
+        lastPC <= pc;
 
         if(bjTaken) begin
             if(bjSrcType == `SRC_I4) // branch
