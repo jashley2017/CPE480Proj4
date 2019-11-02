@@ -86,7 +86,7 @@ module processor(halt, reset, clk);
   //when pushing a popping, add/sub the stack
   reg `WORD undofile `MEMSIZE;
   reg pushpop;
-  reg undo_enable;
+  reg undo_enable = 0;
   reg `WORD to_pop;
   reg `WORD to_push;
   reg `WORD lastPC;
@@ -173,7 +173,8 @@ module processor(halt, reset, clk);
         end
     end
     else begin
-        op2 <= `noOP;
+      op2 <= `noOP;
+      daddr1 <= 1'bx;
     end
   end
 
@@ -191,6 +192,9 @@ module processor(halt, reset, clk);
           // this is the 2's compliment conversion, I am sure it does not need to be at the bit level but I really dont like bugs.
           `SRC_I4: begin srcFull2 <= src1[3] ? {12'b111111111111, (src1 ^ 4'b1111) + 4'b0001} : {12'b000000000000, src1};end
         endcase
+    end
+    else begin
+      daddr2 <= 1'bx;
     end
   end
 
@@ -210,6 +214,7 @@ module processor(halt, reset, clk);
       end
       else begin
         op3 <= `noOP;
+        daddr3 <= 1'bx;
       end
   end
 
@@ -253,7 +258,7 @@ module processor(halt, reset, clk);
         if(result4[15] == 1) is_neg <= 1;
         if(result4 == 0) is_zero <= 1;
         daddr4 <= daddr3;
-        op3 <= op4;
+        op4 <= op3;
         srcType4 <= srcType3;
     end
   end
@@ -262,7 +267,7 @@ module processor(halt, reset, clk);
   always @(posedge clk) begin
     case (op4)
       `OPadd , `OPsub , `OPxor , `OPex  , `OProl , `OPshr , `OPor  , `OPand , `OPdup : begin
-        daddr4 <= result4;
+        regfile[daddr4] <= result4;
       end
       `OPbjz: begin bjTaken <= is_zero; bjTarget <= result4; control_dependency <=0 ; end
       `OPbjnz: begin bjTaken <= ~is_zero; bjTarget <= result4; control_dependency <= 0; end
@@ -291,11 +296,11 @@ module processor(halt, reset, clk);
   always @(posedge clk) begin
     //check for data dependencies after register read STAGE
     //only throw a data dependency if daddr matches or src matches a later daddr and src is a reg type
-    if((
+    if(~(
       (|(daddr1^daddr2))|
       (|(daddr1^daddr3))|
       (|(daddr1^daddr4)))|
-        ((|(src1^daddr2))|
+        ~((|(src1^daddr2))|
         (|(src1^daddr3))|
         (|(src1^daddr4)))) begin
         if((srcType1 == 0)|(srcType1 == 2))begin
