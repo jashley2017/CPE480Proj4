@@ -93,13 +93,13 @@ module processor(halt, reset, clk);
   integer undo_sp  = 0;
 
 
-  //BUFFER FIELDS FOR LOAD/DECODE OUTPUT, REGISTER READ INPUT
+  // BUFFER FIELDS FOR LOAD/DECODE OUTPUT, REGISTER READ INPUT
   reg `BUFOP op1;
   reg `BUFSRC src1;
   reg `BUFSRCTYPE srcType1;
   reg `BUFDADDR daddr1;
 
-  //BUFFER FIELDS FOR REGISTER READ OUTPUT, MEMORY READ/WRITE INPUT
+  // BUFFER FIELDS FOR REGISTER READ OUTPUT, MEMORY READ/WRITE INPUT
   reg `BUFOP op2;
   reg `BUFDADDR daddr2;
   reg `BUF16 srcFull2;
@@ -113,7 +113,7 @@ module processor(halt, reset, clk);
   reg `BUFSRCTYPE srcType3;
   reg `BUF16 destFull3;
 
-  //BUFFER FIELDS FOR ALU OUTPUT, REG WRITE INPUT
+  // BUFFER FIELDS FOR ALU OUTPUT, REG WRITE INPUT
   reg `BUFOP op4;
   reg `BUF16 result4;
   reg `BUFDADDR daddr4;
@@ -121,15 +121,18 @@ module processor(halt, reset, clk);
   reg is_zero;
   reg is_neg;
 
-  //BUFFER FIELDS FOR REG WRITE OUTPUT, LOAD/DECODE INPUT
+  // BUFFER FIELDS FOR REG WRITE OUTPUT, LOAD/DECODE INPUT
   reg  bjTaken;
   reg `BUFSRCTYPE bjSrcType;
   reg `BJ_TARGET bjTarget;
 
-  //RESET PROCEDURE
+  // RESET PROCEDURE
   always @(reset) begin
     halt = 0;
     pc = 0;
+    for(i = undo_sp; undo_sp - i < `NUMREGS; i = i - 1) begin
+      $dumpvars(0, undofile[i]);
+    end
     undo_sp = 0;
     $readmemh0(regfile);
     $readmemh1(datamem);
@@ -139,12 +142,13 @@ module processor(halt, reset, clk);
     end
   end
 
-  //LOAD AND DECODE STAGE
+  // STAGE 1: LOAD AND DECODE STAGE
   always @(posedge clk) begin
     if(!dataDependency & !undo_enable & !control_dependency) begin
         case (instmem[pc] `IMMSIZE)
           1: op1 <= {instmem[pc] `OP_4, 2'b00};
-          default:  op1 <= instmem[pc] `OP_6;
+          default:  if(instmem[pc] != `noOP) op1 <= instmem[pc] `OP_6;
+                    else op1 <= `noOP;
         endcase
 
         // Set source, source type and destination address
@@ -153,7 +157,7 @@ module processor(halt, reset, clk);
         daddr1 <= instmem[pc] `DEST;
 
         // Special case instructions: sys, land
-        if(op1 == `OPsys) begin halt <= 1; end
+        if(op1 == `OPsys | op1 == `fail) begin halt <= 1; end
         if((op1 == `OPbjn) | (op1 == `OPbjnn) | (op1 == `OPbjz) | (op1 == `OPbjnz)) begin control_dependency <= 1; end
         if(op1 == `OPland) begin to_push = lastPC; pushpop = 0; undo_enable <= 1; end
         lastPC <= pc;
@@ -168,11 +172,14 @@ module processor(halt, reset, clk);
             pc <= pc+1;
         end
     end
+    else begin
+        op2 <= `noOP;
+    end
   end
 
-  //REGISTER READ
+  // STAGE 2: REGISTER READ
   always @(posedge clk) begin
-    if(!dataDependency & !control_dependency) begin
+    if(!dataDependency) begin
         destFull2 <= regfile[daddr1];
         daddr2 <= daddr1;
         srcType2 <= srcType1;
@@ -187,9 +194,9 @@ module processor(halt, reset, clk);
     end
   end
 
-  // MEMORY READ/WRITE
+  // STAGE 3: MEMORY READ/WRITE
   always @(posedge clk) begin
-      if(!dataDependency & !control_dependency) begin
+      if(!dataDependency) begin
           op3 <= op2;
           daddr3 <= daddr2;
           destFull3 <= destFull2;
@@ -201,11 +208,14 @@ module processor(halt, reset, clk);
             srcFull3 <= srcFull2;
           if(op2 == `OPex) datamem[srcFull2] <= destFull2;
       end
+      else begin
+        op3 <= `noOP;
+      end
   end
 
-  //ALU
+  // STAGE 4: ALU
   always @(posedge clk) begin
-    if(!dataDependency & !undo_enable & !control_dependency) begin
+    if(!undo_enable) begin
         // needed to store dest value in undobuff before write
         case (op3)
           `OPlhi, `OPllo, `OPshr, `OPor, `OPand , `OPdup : begin
@@ -248,24 +258,21 @@ module processor(halt, reset, clk);
     end
   end
 
-
-  //REGISTER WRITE
+  // STAGE 5: REGISTER WRITE
   always @(posedge clk) begin
-    if(!dataDependency & !control_dependency) begin
-        case (op4)
-          `OPadd , `OPsub , `OPxor , `OPex  , `OProl , `OPshr , `OPor  , `OPand , `OPdup : begin
-            daddr4 <= result4;
-          end
-          `OPbjz: begin bjTaken <= is_zero; bjTarget <= result4; control_dependency <=0 ; end
-          `OPbjnz: begin bjTaken <= ~is_zero; bjTarget <= result4; control_dependency <= 0; end
-          `OPbjn: begin bjTaken <=  is_neg;  bjTarget <= result4; control_dependency <= 0; end
-          `OPbjnn: begin bjTaken <= ~is_neg;  bjTarget <= result4; control_dependency <= 0; end
-        endcase
-        bjSrcType <= srcType4;
-    end
+    case (op4)
+      `OPadd , `OPsub , `OPxor , `OPex  , `OProl , `OPshr , `OPor  , `OPand , `OPdup : begin
+        daddr4 <= result4;
+      end
+      `OPbjz: begin bjTaken <= is_zero; bjTarget <= result4; control_dependency <=0 ; end
+      `OPbjnz: begin bjTaken <= ~is_zero; bjTarget <= result4; control_dependency <= 0; end
+      `OPbjn: begin bjTaken <=  is_neg;  bjTarget <= result4; control_dependency <= 0; end
+      `OPbjnn: begin bjTaken <= ~is_neg;  bjTarget <= result4; control_dependency <= 0; end
+    endcase
+    bjSrcType <= srcType4;
   end
 
-  //UNDO STACK HANDLING
+  // UNDO STACK HANDLING
   always @(posedge clk) begin
     if (undo_enable == 1) begin
       if(|pushpop && undo_sp != 0) begin
@@ -280,6 +287,7 @@ module processor(halt, reset, clk);
     end
   end
 
+  // DATA DEPENDENCY HANDLING
   always @(posedge clk) begin
     //check for data dependencies after register read STAGE
     //only throw a data dependency if daddr matches or src matches a later daddr and src is a reg type
@@ -296,6 +304,7 @@ module processor(halt, reset, clk);
     else dataDependency <= 0;
     end
   end
+
 endmodule
 
 module testbench;
