@@ -1,0 +1,83 @@
+.text
+.origin 0x0000
+start: 
+
+; data dependency trigger
+add $0, 1 
+add $0, 1
+add $0, 1
+add $0, 1
+add $0, 1
+xor $0, 5
+bz $0, 1
+sys
+land
+
+; undo stack test
+llo $2 0x05 
+or $2 0x3 ; 5 is at stack top now, should trigger undo_stack dependency and stall
+xor $0 1$
+bz $0, 1 
+sys
+land
+
+; branch noop test
+bnz $2, 1
+add $2, $2 
+land
+xor $2, 0x5
+bz $2, 1 
+sys
+land
+
+; just test every instruction from here
+.text
+.origin 0x0000
+start:
+bz      $1, 1 ; test bz, bnz & xor
+sys
+xor     $1, 1
+bnz     $1, 1
+sys
+land
+
+add     $1, 1 ; test add
+xor     $1, 2
+bz      $1, 1
+sys
+land
+
+add     $1, 2
+sub     $1, 1 ; test sub
+xor     $1, 1
+bz      $1, 1
+sys
+land
+
+add     $1, 1
+and     $1, 1 ; test and
+xor     $1, 1
+bz      $1, 1
+sys
+land
+
+add     $2, 1
+dup     $1, $2 ; test dup
+xor     $1, 1
+bz      $1, 1
+sys
+land
+
+sub     $1, 1 ; test bn & bnn
+bnn     $1, 1
+bn      $1, 1
+land
+sys
+land
+
+and     $1, 0
+or      $1, 1 ; test or
+xor     $1, 1
+bz      $1, 1
+sys
+land
