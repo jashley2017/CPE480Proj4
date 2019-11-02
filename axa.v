@@ -61,8 +61,8 @@
 `define SRC_UNDO 2'b11
 
 // branch and jump
-`define BR_TARGET [3:0]
-`define J_TARGET  [15:0]
+// Branch will only use 4 bits of this
+`define BJ_TARGET  [15:0]
 
 module processor(halt, reset, clk);
   output reg halt;
@@ -76,6 +76,7 @@ module processor(halt, reset, clk);
   reg `STATE s;
   integer i = 0;
 
+
   //undo stack trickery
   //here is how undo works
   //it can get accessed with X$ like a regfile by saying (undofile[undo_sp - X])
@@ -86,6 +87,7 @@ module processor(halt, reset, clk);
   reg `WORD to_pop;
   reg `WORD to_push;
   integer undo_sp  = 0;
+
 
   //BUFFER FIELDS FOR LOAD/DECODE OUTPUT, REGISTER READ INPUT
   reg `BUFOP op1;
@@ -104,20 +106,21 @@ module processor(halt, reset, clk);
   reg `BUFOP op3;
   reg `BUFDADDR daddr3;
   reg `BUF16 srcFull3;
+  reg `BUFSRCTYPE srcType3;
   reg `BUF16 destFull3;
 
   //BUFFER FIELDS FOR ALU OUTPUT, REG WRITE INPUT
   reg `BUFOP op4;
   reg `BUF16 result4;
   reg `BUFDADDR daddr4;
+  reg `BUFSRCTYPE srcType4;
   reg is_zero;
   reg is_neg;
 
   //BUFFER FIELDS FOR REG WRITE OUTPUT, LOAD/DECODE INPUT
-  reg branchTaken;
-  reg `BR_TARGET branchTarget;
-  reg jumpTaken;
-  reg `J_TARGET jumpTarget;
+  reg bjTaken;
+  reg `BUFSRCTYPE bjSrcType;
+  reg `BJ_TARGET bjTarget;
 
   //RESET PROCEDURE
   always @(reset) begin
@@ -130,22 +133,32 @@ module processor(halt, reset, clk);
     for(i = 0; i < `NUMREGS; i = i + 1) begin
       $dumpvars(0, regfile[i]);
     end
-    // for(i = 0; i <= `REGSIZE; i = i + 1) begin
-    //   undofile[i] <= 0;
-    // end
   end
 
   //LOAD AND DECODE STAGE
   always @(posedge clk) begin
     case (instmem[pc] `IMMSIZE)
       1: op1 <= {instmem[pc] `OP_4, 2'b00};
-      default:  op1 <= instmem[pc] `OP_4;
+      default:  op1 <= instmem[pc] `OP_6;
     endcase
+
+    // Set source, source type and destination address
     src1 <= instmem[pc] `SRC;
     srcType1 <= instmem[pc] `SRCTYPE;
     daddr1 <= instmem[pc] `DEST;
-    if(instmem[pc] `OP_6 == `OPsys) halt <= 1;
-    pc <= pc+1;
+
+    // Special case instructions sys, land
+    if(op1 == `OPsys) begin halt <= 1; end
+    // if(op1 == `OPland) // PUSH LASTPC
+
+    if(bjTaken) begin
+        if(bjSrcType == `SRC_I4) // branch
+            pc <= pc + bjTarget;
+        else  // jump
+            pc <= bjTarget;
+    else
+        pc <= pc+1;
+    end
   end
 
   //REGISTER READ
@@ -169,6 +182,7 @@ module processor(halt, reset, clk);
       op3 <= op2;
       daddr3 <= daddr2;
       destFull3 <= destFull2;
+      srcType3 <= srcType2;
 
       if(srcType2 == `SRC_ADDR)
         srcFull3 <= datamem[srcFull2];
@@ -218,6 +232,7 @@ module processor(halt, reset, clk);
     if(result4 == 0) is_zero <= 1;
     daddr4 <= daddr3;
     op3 <= op4;
+    srcType4 <= srcType3;
   end
 
 
@@ -227,12 +242,12 @@ module processor(halt, reset, clk);
       `OPadd , `OPsub , `OPxor , `OPex  , `OProl , `OPshr , `OPor  , `OPand , `OPdup : begin
         daddr4 <= result4;
       end
-      // where are we pushing the pc for these?
-      `OPbjz:    begin  jumpTaken <=  is_zero; end
-      `OPbjnz:   begin  jumpTaken <= ~is_zero; end
-      `OPbjn:    begin  jumpTaken <=  is_neg;  end
-      `OPbjnn:   begin  jumpTaken <= ~is_neg;  end
+      `OPbjz:    begin  bjTaken <=  is_zero; bjTarget <= result4 end
+      `OPbjnz:   begin  bjTaken <= ~is_zero; bjTarget <= result4 end
+      `OPbjn:    begin  bjTaken <=  is_neg;  bjTarget <= result4 end
+      `OPbjnn:   begin  bjTaken <= ~is_neg;  bjTarget <= result4 end
     endcase
+    bjSrcType <= srcType4
   end
 
   //UNDO STACK HANDLING
