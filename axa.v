@@ -45,6 +45,7 @@
 `define OPlhi   4'b1100
 `define OPllo   4'b1110
 
+`define NUMREGS 16
 // state numbers only
 `define Start   6'b111111
 `define INPIPE  6'b111110
@@ -79,11 +80,16 @@ module processor(halt, reset, clk);
 
 
   //undo stack trickery
-  wire pushpop;
-  reg enable;
-  wire `WORD to_pop;
+  //here is how undo works
+  //it can get accessed with X$ like a regfile by saying (undofile[undo_sp - X])
+  //when pushing a popping, add/sub the stack
+  reg `WORD undofile `MEMSIZE;
+  reg pushpop;
+  reg undo_enable;
+  reg `WORD to_pop;
   reg `WORD to_push;
-  undo_stack undofile(enable,pushpop,to_push,to_pop);
+  integer undo_sp  = 0;
+
 
   //BUFFER FIELDS FOR LOAD/DECODE OUTPUT, REGISTER READ INPUT
   reg `BUFOP op1;
@@ -102,7 +108,7 @@ module processor(halt, reset, clk);
   reg `BUFOP op3;
   reg `BUFDADDR daddr3;
   reg `BUF16 srcFull3;
-  ref `BUFSRCTYPE srcType3;
+  reg `BUFSRCTYPE srcType3;
   reg `BUF16 destFull3;
 
   //BUFFER FIELDS FOR ALU OUTPUT, REG WRITE INPUT
@@ -122,10 +128,11 @@ module processor(halt, reset, clk);
   always @(reset) begin
     halt = 0;
     pc = 0;
+    undo_sp = 0;
     $readmemh0(regfile);
     $readmemh1(datamem);
     $readmemh2(instmem);
-    for(i = 0; i < 16; i = i + 1) begin
+    for(i = 0; i < `NUMREGS; i = i + 1) begin
       $dumpvars(0, regfile[i]);
     end
   end
@@ -192,12 +199,13 @@ module processor(halt, reset, clk);
     // needed to store dest value in undobuff before write
     case (op3)
       `OPlhi, `OPllo, `OPshr, `OPor, `OPand , `OPdup : begin
-        while (enable == 1)
-          begin
-            #1;
-          end
-        to_push <= destFull3;
-        enable <= 1;
+        while (undo_enable == 1) begin
+          #1;
+        end
+        to_push = destFull3;
+        pushpop = 0;
+        // this will trigger the undo_stack to push
+        undo_enable <= 1;
       end
     endcase
 
@@ -244,9 +252,19 @@ module processor(halt, reset, clk);
     bjSrcType <= srcType4
   end
 
-
+  //UNDO STACK HANDLING
   always @(posedge clk) begin
-    enable <= 0;
+    if (undo_enable == 1) begin
+      if(|pushpop && undo_sp != 0) begin
+        to_pop <= undofile[undo_sp];
+        undo_sp <= undo_sp - 1;
+      end
+      else if(~|pushpop) begin
+        undofile[undo_sp] <= to_push;
+        undo_sp <= undo_sp + 1;
+      end
+      undo_enable <= 0;
+    end
   end
 
   always @(posedge clk) begin
@@ -283,32 +301,5 @@ module testbench;
       #10 clk = 0;
     end
     $finish;
-  end
-endmodule
-
-
-// credit to gambhirprateek on https://stackoverflow.com/questions/37916758/trying-to-implement-a-stack-in-verilog-whats-wrong-with-the-code
-module undo_stack(enable,R_W,PUSH,POP);
-
-  input enable;
-  input [15:0] PUSH;
-  input  R_W;
-  output [15:0] POP;
-
-  wire [15:0] PUSH;
-  reg [15:0] POP;
-  wire R_W;
-
-  reg [15:0] undoTemp[0:15];
-  integer tos = 15;
-
-  always @(posedge enable)
-  if(R_W == 1 && tos != 3) begin
-    POP = undoTemp[tos];
-    tos = tos + 1;
-  end
-  else if(R_W == 0 && tos != 0) begin
-    undoTemp[tos] = PUSH;
-    tos = tos - 1;
   end
 endmodule
