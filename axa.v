@@ -44,6 +44,7 @@
 `define OPlhi   4'b1100
 `define OPllo   4'b1110
 
+`define NUMREGS 16
 // state numbers only
 `define Start   6'b111111
 `define INPIPE  6'b111110
@@ -75,12 +76,16 @@ module processor(halt, reset, clk);
   reg `STATE s;
   integer i = 0;
 
-  integer undo_sp =0;
-  reg `WORD undofile `REGSIZE;
-  reg `WORD toPushPC;
-  reg `Word toPushDest;
-  reg newPushDest;
-  reg newPushPC;
+  //undo stack trickery
+  //here is how undo works
+  //it can get accessed with X$ like a regfile by saying (undofile[undo_sp - X])
+  //when pushing a popping, add/sub the stack
+  reg `WORD undofile `MEMSIZE;
+  reg pushpop;
+  reg undo_enable;
+  reg `WORD to_pop;
+  reg `WORD to_push;
+  integer undo_sp  = 0;
 
   //BUFFER FIELDS FOR LOAD/DECODE OUTPUT, REGISTER READ INPUT
   reg `BUFOP op1;
@@ -118,15 +123,16 @@ module processor(halt, reset, clk);
   always @(reset) begin
     halt = 0;
     pc = 0;
+    undo_sp = 0;
     $readmemh0(regfile);
     $readmemh1(datamem);
     $readmemh2(instmem);
-    for(i = 0; i <= `REGSIZE; i = i + 1) begin
+    for(i = 0; i < `NUMREGS; i = i + 1) begin
       $dumpvars(0, regfile[i]);
     end
-    for(i = 0; i <= `REGSIZE; i = i + 1) begin
-      undofile[i] <= 0;
-    end
+    // for(i = 0; i <= `REGSIZE; i = i + 1) begin
+    //   undofile[i] <= 0;
+    // end
   end
 
   //LOAD AND DECODE STAGE
@@ -177,8 +183,13 @@ module processor(halt, reset, clk);
     // needed to store dest value in undobuff before write
     case (op3)
       `OPlhi, `OPllo, `OPshr, `OPor, `OPand , `OPdup : begin
-         toPushDest <= destFull3;
-         newPushDest <= 1;
+        while (undo_enable == 1) begin
+          #1;
+        end
+        to_push = destFull3;
+        pushpop = 0;
+        // this will trigger the undo_stack to push
+        undo_enable <= 1;
       end
     endcase
 
@@ -224,19 +235,19 @@ module processor(halt, reset, clk);
     endcase
   end
 
-  // Manage undo buffer
+  //UNDO STACK HANDLING
   always @(posedge clk) begin
-    if(newPushDest) begin
-        undofile[undo_sp] <= toPushDest;
-        undo_sp = undo_sp +1;
+    if (undo_enable == 1) begin
+      if(|pushpop && undo_sp != 0) begin
+        to_pop <= undofile[undo_sp];
+        undo_sp <= undo_sp - 1;
+      end
+      else if(~|pushpop) begin
+        undofile[undo_sp] <= to_push;
+        undo_sp <= undo_sp + 1;
+      end
+      undo_enable <= 0;
     end
-    if(newPushPC) begin
-        undofile[undo_sup]<= toPushPC;
-        undo_sp = undo_sp +1;
-  end
-
-  always @(posedge clk) begin
-    enable <= 0;
   end
 endmodule
 
