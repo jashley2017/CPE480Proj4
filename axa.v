@@ -144,7 +144,8 @@ module processor(halt, reset, clk);
     if(!dataDependency & !undo_enable & !control_dependency) begin
         case (instmem[pc] `IMMSIZE)
           1: op1 <= {instmem[pc] `OP_4, 2'b00};
-          default:  op1 <= instmem[pc] `OP_6;
+          default:  if(instmem[pc] != `noOP) op1 <= instmem[pc] `OP_6;
+                    else op1 <= `noOP;
         endcase
 
         // Set source, source type and destination address
