@@ -273,15 +273,14 @@ module processor(halt, reset, clk);
     if((
       (|(daddr1^daddr2))|
       (|(daddr1^daddr3))|
-      (|(daddr1^daddr4))|
-      (|(daddr1^daddr5)))|
+      (|(daddr1^daddr4)))|
         ((|(src1^daddr2))|
         (|(src1^daddr3))|
-        (|(src1^daddr4))|
-        (|(src1^daddr5)))) begin
+        (|(src1^daddr4)))) begin
         if((srcType1 == 0)|(srcType1 == 2))begin
           dataDependency <= 1;
         end
+    else dataDependency <= 0;
     end
   end
 endmodule
