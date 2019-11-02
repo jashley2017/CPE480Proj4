@@ -37,6 +37,7 @@
 `define OPsys   6'b000000
 `define OPcom   6'b000001
 `define fail    6'b001111
+`define noOP    6'b000001
 
 //8-bit immediate instruction opcodes
 `define OPxhi   4'b1000
@@ -74,6 +75,8 @@ module processor(halt, reset, clk);
   reg `WORD pc = 0;
   reg `WORD ir;
   reg `STATE s;
+  reg dataDependency =  0;
+  reg control_dependency = 0;
   integer i = 0;
 
 
@@ -86,6 +89,7 @@ module processor(halt, reset, clk);
   reg undo_enable;
   reg `WORD to_pop;
   reg `WORD to_push;
+  reg `WORD lastPC;
   integer undo_sp  = 0;
 
 
@@ -118,7 +122,7 @@ module processor(halt, reset, clk);
   reg is_neg;
 
   //BUFFER FIELDS FOR REG WRITE OUTPUT, LOAD/DECODE INPUT
-  reg bjTaken;
+  reg  bjTaken;
   reg `BUFSRCTYPE bjSrcType;
   reg `BJ_TARGET bjTarget;
 
@@ -137,117 +141,128 @@ module processor(halt, reset, clk);
 
   //LOAD AND DECODE STAGE
   always @(posedge clk) begin
-    case (instmem[pc] `IMMSIZE)
-      1: op1 <= {instmem[pc] `OP_4, 2'b00};
-      default:  op1 <= instmem[pc] `OP_6;
-    endcase
+    if(!dataDependency & !undo_enable & !control_dependency) begin
+        case (instmem[pc] `IMMSIZE)
+          1: op1 <= {instmem[pc] `OP_4, 2'b00};
+          default:  op1 <= instmem[pc] `OP_6;
+        endcase
 
-    // Set source, source type and destination address
-    src1 <= instmem[pc] `SRC;
-    srcType1 <= instmem[pc] `SRCTYPE;
-    daddr1 <= instmem[pc] `DEST;
+        // Set source, source type and destination address
+        src1 <= instmem[pc] `SRC;
+        srcType1 <= instmem[pc] `SRCTYPE;
+        daddr1 <= instmem[pc] `DEST;
 
-    // Special case instructions sys, land
-    if(op1 == `OPsys) begin halt <= 1; end
-    // if(op1 == `OPland) // PUSH LASTPC
+        // Special case instructions: sys, land
+        if(op1 == `OPsys) begin halt <= 1; end
+        if((op1 == `OPbjn) | (op1 == `OPbjnn) | (op1 == `OPbjz) | (op1 == `OPbjnz)) begin control_dependency <= 1; end
+        if(op1 == `OPland) begin to_push = lastPC; pushpop = 0; undo_enable <= 1; end
+        lastPC <= pc;
 
-    if(bjTaken) begin
-        if(bjSrcType == `SRC_I4) // branch
-            pc <= pc + bjTarget;
-        else  // jump
-            pc <= bjTarget;
-    else
-        pc <= pc+1;
+        if(bjTaken) begin
+            if(bjSrcType == `SRC_I4) // branch
+                pc <= pc + bjTarget;
+            else  // jump
+                pc <= bjTarget;
+        end
+        else begin
+            pc <= pc+1;
+        end
     end
   end
 
   //REGISTER READ
   always @(posedge clk) begin
-    destFull2 <= regfile[daddr1];
-    daddr2 <= daddr1;
-    srcType2 <= srcType1;
-    op2 <= op1;
-    case (srcType1)
-    // TODO: Align this with the current undo buffer implementation
-      `SRC_UNDO: begin srcFull2 <= undofile[src1];end
-      `SRC_REG:  begin srcFull2 <= regfile[src1];end
-      `SRC_ADDR: begin srcFull2 <= regfile[src1];end
-      // this is the 2's compliment conversion, I am sure it does not need to be at the bit level but I really dont like bugs.
-      `SRC_I4: begin srcFull2 <= src1[3] ? {12'b111111111111, (src1 ^ 4'b1111) + 4'b0001} : {12'b000000000000, src1};end
-    endcase
+    if(!dataDependency & !control_dependency) begin
+        destFull2 <= regfile[daddr1];
+        daddr2 <= daddr1;
+        srcType2 <= srcType1;
+        op2 <= op1;
+        case (srcType1)
+          `SRC_UNDO: begin srcFull2 <= undofile[undo_sp- src1];end
+          `SRC_REG:  begin srcFull2 <= regfile[src1];end
+          `SRC_ADDR: begin srcFull2 <= regfile[src1];end
+          // this is the 2's compliment conversion, I am sure it does not need to be at the bit level but I really dont like bugs.
+          `SRC_I4: begin srcFull2 <= src1[3] ? {12'b111111111111, (src1 ^ 4'b1111) + 4'b0001} : {12'b000000000000, src1};end
+        endcase
+    end
   end
 
   // MEMORY READ/WRITE
   always @(posedge clk) begin
-      op3 <= op2;
-      daddr3 <= daddr2;
-      destFull3 <= destFull2;
-      srcType3 <= srcType2;
+      if(!dataDependency & !control_dependency) begin
+          op3 <= op2;
+          daddr3 <= daddr2;
+          destFull3 <= destFull2;
+          srcType3 <= srcType2;
 
-      if(srcType2 == `SRC_ADDR)
-        srcFull3 <= datamem[srcFull2];
-      else
-        srcFull3 <= srcFull2;
-
-      if(op2 == `OPex) datamem[srcFull2] <= destFull2;
+          if(srcType2 == `SRC_ADDR)
+            srcFull3 <= datamem[srcFull2];
+          else
+            srcFull3 <= srcFull2;
+          if(op2 == `OPex) datamem[srcFull2] <= destFull2;
+      end
   end
 
   //ALU
   always @(posedge clk) begin
-    // needed to store dest value in undobuff before write
-    case (op3)
-      `OPlhi, `OPllo, `OPshr, `OPor, `OPand , `OPdup : begin
-        while (undo_enable == 1) begin
-          #1;
-        end
-        to_push = destFull3;
-        pushpop = 0;
-        // this will trigger the undo_stack to push
-        undo_enable <= 1;
-      end
-    endcase
+    if(!dataDependency & !undo_enable & !control_dependency) begin
+        // needed to store dest value in undobuff before write
+        case (op3)
+          `OPlhi, `OPllo, `OPshr, `OPor, `OPand , `OPdup : begin
+            while (undo_enable == 1) begin
+              #1;
+            end
+            to_push = destFull3;
+            pushpop = 0;
+            // this will trigger the undo_stack to push
+            undo_enable <= 1;
+          end
+        endcase
 
-    // Another case statement for op3- this time for actual operations. Having
-    // two seperate case statements saves us repeating the push process
-    case(op3)
-        `OPxhi: result4 <= destFull3 ^ (srcFull3 << 8);
-        `OPxlo: result4 <= destFull3 ^ srcFull3;
-        `OPlhi: result4 <= srcFull3 << 8;
-        `OPllo: result4 <= {{8{srcFull3[15]}},srcFull3}; // sign extend immediate to 16-bits
-        `OPadd: result4 <= destFull3 + srcFull3;
-        `OPsub: result4 <= destFull3 - srcFull3;
-        `OPxor: result4 <= destFull3 ^ srcFull3;
-        `OProl: begin
-                temp = destFull3 << srcFull3;
-                result4 <= temp | destFull3 >> (16- srcFull3);
-                end
-        `OPshr: result4 <= destFull3 >> srcFull3;
-        `OPor:  result4 <= destFull3 | srcFull3;
-        `OPand: result4 <= destFull3 & srcFull3;
-        `OPdup: result4 <= srcFull3;
-        default: result4 <= destFull3;
-    endcase
+        // Another case statement for op3- this time for actual operations. Having
+        // two seperate case statements saves us repeating the push process
+        case(op3)
+            `OPxhi: result4 <= destFull3 ^ (srcFull3 << 8);
+            `OPxlo: result4 <= destFull3 ^ srcFull3;
+            `OPlhi: result4 <= srcFull3 << 8;
+            `OPllo: result4 <= {{8{srcFull3[15]}},srcFull3}; // sign extend immediate to 16-bits
+            `OPadd: result4 <= destFull3 + srcFull3;
+            `OPsub: result4 <= destFull3 - srcFull3;
+            `OPxor: result4 <= destFull3 ^ srcFull3;
+            `OProl: begin
+                    temp = destFull3 << srcFull3;
+                    result4 <= temp | destFull3 >> (16- srcFull3);
+                    end
+            `OPshr: result4 <= destFull3 >> srcFull3;
+            `OPor:  result4 <= destFull3 | srcFull3;
+            `OPand: result4 <= destFull3 & srcFull3;
+            `OPdup: result4 <= srcFull3;
+            default: result4 <= destFull3;
+        endcase
 
-    if(result4[15] == 1) is_neg <= 1;
-    if(result4 == 0) is_zero <= 1;
-    daddr4 <= daddr3;
-    op3 <= op4;
-    srcType4 <= srcType3;
+        if(result4[15] == 1) is_neg <= 1;
+        if(result4 == 0) is_zero <= 1;
+        daddr4 <= daddr3;
+        op3 <= op4;
+        srcType4 <= srcType3;
+    end
   end
 
 
   //REGISTER WRITE
   always @(posedge clk) begin
-    case (op4)
-      `OPadd , `OPsub , `OPxor , `OPex  , `OProl , `OPshr , `OPor  , `OPand , `OPdup : begin
-        daddr4 <= result4;
-      end
-      `OPbjz:    begin  bjTaken <=  is_zero; bjTarget <= result4 end
-      `OPbjnz:   begin  bjTaken <= ~is_zero; bjTarget <= result4 end
-      `OPbjn:    begin  bjTaken <=  is_neg;  bjTarget <= result4 end
-      `OPbjnn:   begin  bjTaken <= ~is_neg;  bjTarget <= result4 end
-    endcase
-    bjSrcType <= srcType4
+    if(!dataDependency & !control_dependency) begin
+        case (op4)
+          `OPadd , `OPsub , `OPxor , `OPex  , `OProl , `OPshr , `OPor  , `OPand , `OPdup : begin
+            daddr4 <= result4;
+          end
+          `OPbjz: begin bjTaken <= is_zero; bjTarget <= result4; control_dependency <=0 ; end
+          `OPbjnz: begin bjTaken <= ~is_zero; bjTarget <= result4; control_dependency <= 0; end
+          `OPbjn: begin bjTaken <=  is_neg;  bjTarget <= result4; control_dependency <= 0; end
+          `OPbjnn: begin bjTaken <= ~is_neg;  bjTarget <= result4; control_dependency <= 0; end
+        endcase
+        bjSrcType <= srcType4;
+    end
   end
 
   //UNDO STACK HANDLING
@@ -262,6 +277,23 @@ module processor(halt, reset, clk);
         undo_sp <= undo_sp + 1;
       end
       undo_enable <= 0;
+    end
+  end
+
+  always @(posedge clk) begin
+    //check for data dependencies after register read STAGE
+    //only throw a data dependency if daddr matches or src matches a later daddr and src is a reg type
+    if((
+      (|(daddr1^daddr2))|
+      (|(daddr1^daddr3))|
+      (|(daddr1^daddr4)))|
+        ((|(src1^daddr2))|
+        (|(src1^daddr3))|
+        (|(src1^daddr4)))) begin
+        if((srcType1 == 0)|(srcType1 == 2))begin
+          dataDependency <= 1;
+        end
+    else dataDependency <= 0;
     end
   end
 endmodule
