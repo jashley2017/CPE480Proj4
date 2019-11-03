@@ -306,7 +306,9 @@ module processor(halt, reset, clk);
   always @(posedge clk) begin
     //check for data dependencies after register read STAGE
     //only throw a data dependency if daddr matches or src matches a later daddr and src is a reg type
-    if((
+    if( (daddr1 === 1'bx) & (daddr2 === 1'bx) & (daddr2 === 1'bx) & (daddr4 === 1'bx))
+        dataDependency = 0;
+    else if ((
       (~(instmem[pc] `DEST ^ daddr1))|
       (~(instmem[pc] `DEST ^ daddr2))|
       (~(instmem[pc] `DEST ^ daddr3))|
