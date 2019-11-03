@@ -183,6 +183,7 @@ module processor(halt, reset, clk);
     else begin
       op1 <= `noOP;
       daddr1 <= 1'bx;
+      src1 <= 1'bx;
     end
   end
 
@@ -202,7 +203,8 @@ module processor(halt, reset, clk);
         endcase
     end
     else begin
-      daddr2 <= 1'bx;
+      op2 <= op1
+      daddr2 <= daddr1;
     end
   end
 
@@ -221,8 +223,8 @@ module processor(halt, reset, clk);
           if(op2 == `OPex) datamem[srcFull2] <= destFull2;
       end
       else begin
-        op3 <= `noOP;
-        daddr3 <= 1'bx;
+        op3 <= op2;
+        daddr3 <= daddr2;
       end
   end
 
