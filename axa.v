@@ -255,7 +255,7 @@ module processor(halt, reset, clk);
             `OPshr: result4 <= destFull3 >> srcFull3;
             `OPor:  result4 <= destFull3 | srcFull3;
             `OPand: result4 <= destFull3 & srcFull3;
-            `OPdup,`OPbjz, `OPbjnz, `OPbjn, `OPbjnn : result4 <= srcFull3;
+            `OPdup,`OPbjz, `OPbjnz, `OPbjn, `OPbjnn : result4 <= destFull3;
             `noOP: ;
             default: result4 <= destFull3;
         endcase
@@ -276,10 +276,10 @@ module processor(halt, reset, clk);
       `OPadd , `OPsub , `OPxor , `OPex  , `OProl , `OPshr , `OPor  , `OPand , `OPdup, `STxhi, `STxlo, `STlhi, `STllo : begin
         regfile[daddr4] <= result4;
       end
-      `OPbjz: begin bjTaken = is_zero; bjTarget = result4; bjSrcType = srcType4; control_dependency <=0 ; end
-      `OPbjnz: begin bjTaken = ~is_zero; bjTarget = result4; bjSrcType = srcType4;  control_dependency <= 0; end
-      `OPbjn: begin bjTaken =  is_neg;  bjTarget = result4; bjSrcType = srcType4; control_dependency <= 0; end
-      `OPbjnn: begin bjTaken = ~is_neg;  bjTarget = result4; bjSrcType = srcType4; control_dependency <= 0; end
+      `OPbjz: begin bjTaken = is_zero; bjTarget = srcFull3; bjSrcType = srcType4; control_dependency <=0 ; end
+      `OPbjnz: begin bjTaken = ~is_zero; bjTarget = srcFull3; bjSrcType = srcType4;  control_dependency <= 0; end
+      `OPbjn: begin bjTaken =  is_neg;  bjTarget = srcFull3; bjSrcType = srcType4; control_dependency <= 0; end
+      `OPbjnn: begin bjTaken = ~is_neg;  bjTarget = srcFull3; bjSrcType = srcType4; control_dependency <= 0; end
     endcase
     if(bjTaken) begin
         if(bjSrcType == `SRC_IMM) // branch
