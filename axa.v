@@ -199,7 +199,7 @@ module processor(halt, reset, clk);
           // this is the 2's compliment conversion, I am sure it does not need to be at the bit level but I really dont like bugs.
           `SRC_IMM: begin
                         if(!imm_8)
-                            srcFull2 <= {0000, src1};
+                            srcFull2 <= {4'b0000, src1};
                         else
                             srcFull2 <= src1;
                     end
