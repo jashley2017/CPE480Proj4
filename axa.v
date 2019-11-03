@@ -189,7 +189,6 @@ module processor(halt, reset, clk);
 
   // STAGE 2: REGISTER READ
   always @(posedge clk) begin
-    if(!dataDependency) begin
         destFull2 <= regfile[daddr1];
         daddr2 <= daddr1;
         srcType2 <= srcType1;
@@ -201,30 +200,21 @@ module processor(halt, reset, clk);
           // this is the 2's compliment conversion, I am sure it does not need to be at the bit level but I really dont like bugs.
           `SRC_I4: begin srcFull2 <= src1[3] ? {12'b111111111111, (src1 ^ 4'b1111) + 4'b0001} : {12'b000000000000, src1};end
         endcase
-    end
-    else begin
-      op2 <= op1;
-      daddr2 <= daddr1;
-    end
   end
 
   // STAGE 3: MEMORY READ/WRITE
   always @(posedge clk) begin
-      if(!dataDependency) begin
-          op3 <= op2;
-          daddr3 <= daddr2;
-          destFull3 <= destFull2;
-          srcType3 <= srcType2;
+      op3 <= op2;
+      daddr3 <= daddr2;
+      destFull3 <= destFull2;
+      srcType3 <= srcType2;
 
-          if(srcType2 == `SRC_ADDR)
-            srcFull3 <= datamem[srcFull2];
-          else
-            srcFull3 <= srcFull2;
-          if(op2 == `OPex) datamem[srcFull2] <= destFull2;
-      end
-      else begin
-        op3 <= op2;
-        daddr3 <= daddr2;
+      if(srcType2 == `SRC_ADDR)
+        srcFull3 <= datamem[srcFull2];
+      else
+        srcFull3 <= srcFull2;
+      if(!dataDependency) begin
+        if(op2 == `OPex) datamem[srcFull2] <= destFull2;
       end
   end
 
