@@ -308,7 +308,6 @@ module processor(halt, reset, clk);
         (~(instmem[pc] `SRC ^ daddr2))|
         (~(instmem[pc] `SRC ^ daddr3))|
         (~(instmem[pc] `SRC ^ daddr4)))) dataDependency <= 1;
-    else dataDependency <= 0;
   end
 
 endmodule
