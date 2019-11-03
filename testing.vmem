@@ -1,9 +1,9 @@
 .text
 .origin 0x0000
-start: 
+start:
 
 ; data dependency trigger
-add $0, 1 
+add $0, 1
 add $0, 1
 add $0, 1
 add $0, 1
@@ -15,22 +15,22 @@ sys
 land
 
 ; undo stack test
-llo $0, 0x05 
-llo $2, 0x05 
+llo $0, 0x05
+llo $2, 0x05
 llo $3, 0x11
 or $2, 0x3 ; 5 is at stack top now, should trigger undo_stack dependency and stall
 xor $0, 0$
-bz $0, 1 
+bz $0, 1
 sys
 land
 
 ; branch noop test
-llo $2, 0x05 
+llo $2, 0x05
 bnz $2, 1
-add $2, $2 
+add $2, $2
 land
-xor $2, 0x5
-bz $2, 1 
+xor $2, 0xa
+bz $2, 1
 sys
 land
 
@@ -83,4 +83,4 @@ xor     $1, 1
 bz      $1, 1
 sys
 land
-fail
+sys
