@@ -29,7 +29,7 @@ llo $2, 0x05
 bnz $2, 1
 add $2, $2
 land
-xor $2, 0xa
+xor $2, 0x5
 bz $2, 1
 sys
 land
