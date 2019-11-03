@@ -130,9 +130,9 @@ module processor(halt, reset, clk);
   always @(reset) begin
     halt = 0;
     pc = 0;
-    for(i = undo_sp; undo_sp - i < `NUMREGS; i = i - 1) begin
-      $dumpvars(0, undofile[i]);
-    end
+    //for(i = undo_sp; undo_sp - i < `NUMREGS; i = i - 1) begin
+    //  $dumpvars(0, undofile[i]);
+    //end
     undo_sp = 0;
 
     // WEB VERSION
@@ -321,7 +321,7 @@ module testbench;
   wire halted;
   processor PE(halted, reset, clk);
   initial begin
-    $dumpfile;
+    $dumpfile("results.vcd");
     $dumpvars(0, PE);
     #10 reset = 1;
     #10 reset = 0;
