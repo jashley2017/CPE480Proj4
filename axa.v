@@ -237,10 +237,10 @@ module processor(halt, reset, clk);
         // Another case statement for op3- this time for actual operations. Having
         // two seperate case statements saves us repeating the push process
         case(op3)
-            `OPxhi: result4 <= destFull3 ^ (srcFull3 << 8);
-            `OPxlo: result4 <= destFull3 ^ srcFull3;
-            `OPlhi: result4 <= srcFull3 << 8;
-            `OPllo: result4 <= {{8{srcFull3[15]}},srcFull3}; // sign extend immediate to 16-bits
+            `STxhi: result4 <= destFull3 ^ (srcFull3 << 8);
+            `STxlo: result4 <= destFull3 ^ srcFull3;
+            `STlhi: result4 <= srcFull3 << 8;
+            `STllo: result4 <= {{8{srcFull3[15]}},srcFull3}; // sign extend immediate to 16-bits
             `OPadd: result4 <= destFull3 + srcFull3;
             `OPsub: result4 <= destFull3 - srcFull3;
             `OPxor: result4 <= destFull3 ^ srcFull3;
