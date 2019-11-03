@@ -56,7 +56,7 @@
 `define OPex2   6'b111100
 
 // src_types
-`define SRC_IMM   2'b01
+`define SRC_IMM  2'b01
 `define SRC_REG  2'b00
 `define SRC_ADDR 2'b10
 `define SRC_UNDO 2'b11
@@ -193,7 +193,7 @@ module processor(halt, reset, clk);
         srcType2 <= srcType1;
         op2 <= op1;
         case (srcType1)
-          `SRC_UNDO: begin srcFull2 <= undofile[undo_sp- src1];end
+          `SRC_UNDO: begin srcFull2 <= undofile[undo_sp- src1-1];end
           `SRC_REG:  begin srcFull2 <= regfile[src1];end
           `SRC_ADDR: begin srcFull2 <= regfile[src1];end
           // this is the 2's compliment conversion, I am sure it does not need to be at the bit level but I really dont like bugs.
