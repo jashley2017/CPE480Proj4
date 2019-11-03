@@ -72,7 +72,7 @@ land
 com
 sub     $1, 1 ; test bn & bnn
 bnn     $1, 1
-bn      $1, 1
+bn      $1, 2
 land
 sys
 land
