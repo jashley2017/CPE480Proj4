@@ -294,11 +294,11 @@ module processor(halt, reset, clk);
   end
 
   // DATA DEPENDENCY HANDLING
-  always @(posedge clk) begin
+  always @(negedge clk) begin
     //check for data dependencies after register read STAGE
     //only throw a data dependency if daddr matches or src matches a later daddr and src is a reg type
     if( (daddr1 === 1'bx) & (daddr2 === 1'bx) & (daddr2 === 1'bx) & (daddr4 === 1'bx))
-        dataDependency = 0;
+        dataDependency <= 0;
     else if ((
       (~(instmem[pc] `DEST ^ daddr1))|
       (~(instmem[pc] `DEST ^ daddr2))|
@@ -307,8 +307,8 @@ module processor(halt, reset, clk);
         ((~(instmem[pc] `SRC ^ daddr1))|
         (~(instmem[pc] `SRC ^ daddr2))|
         (~(instmem[pc] `SRC ^ daddr3))|
-        (~(instmem[pc] `SRC ^ daddr4)))) dataDependency = 1;
-    else dataDependency = 0;
+        (~(instmem[pc] `SRC ^ daddr4)))) dataDependency <= 1;
+    else dataDependency <= 0;
   end
 
 endmodule
