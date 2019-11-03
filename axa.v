@@ -304,18 +304,14 @@ module processor(halt, reset, clk);
   always @(posedge clk) begin
     //check for data dependencies after register read STAGE
     //only throw a data dependency if daddr matches or src matches a later daddr and src is a reg type
-    if(~(
-      (|(daddr1^daddr2))|
-      (|(daddr1^daddr3))|
-      (|(daddr1^daddr4)))|
-        ~((|(src1^daddr2))|
-        (|(src1^daddr3))|
-        (|(src1^daddr4)))) begin
-        if((srcType1 == 0)|(srcType1 == 2))begin
-          dataDependency <= 1;
-        end
+    if((
+      (~(daddr1^daddr2))|
+      (~(daddr1^daddr3))|
+      (~(daddr1^daddr4)))|
+        ((~(src1^daddr2))|
+        (~(src1^daddr3))|
+        (~(src1^daddr4)))) dataDependency <= 1;
     else dataDependency <= 0;
-    end
   end
 
 endmodule
