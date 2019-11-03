@@ -183,7 +183,6 @@ module processor(halt, reset, clk);
     else begin
       op1 <= `noOP;
       daddr1 <= 1'bx;
-      src1 <= 1'bx;
     end
   end
 
