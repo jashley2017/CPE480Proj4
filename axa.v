@@ -166,7 +166,6 @@ module processor(halt, reset, clk);
 
         // Special case instructions: sys, land
         if(op1 == `OPsys | op1 == `fail) begin halt <= 1; end
-        if((op1 == `OPbjn) | (op1 == `OPbjnn) | (op1 == `OPbjz) | (op1 == `OPbjnz)) begin control_dependency <= 1; end
         if(op1 == `OPland) begin to_push = lastPC; pushpop = 0; undo_enable <= 1; end
         lastPC <= pc;
 
@@ -293,7 +292,7 @@ module processor(halt, reset, clk);
     end
   end
 
-  // DATA DEPENDENCY HANDLING
+  // CONTROL AND DATA DEPENDENCY HANDLING
   always @(negedge clk) begin
     //check for data dependencies after register read STAGE
     //only throw a data dependency if daddr matches or src matches a later daddr and src is a reg type
@@ -308,6 +307,8 @@ module processor(halt, reset, clk);
         (~(instmem[pc] `SRC ^ daddr2))|
         (~(instmem[pc] `SRC ^ daddr3))|
         (~(instmem[pc] `SRC ^ daddr4)))) dataDependency <= 1;
+
+     if((instmem[pc] == `OPbjn) | (instmem[pc] == `OPbjnn) | (instmem[pc] == `OPbjz) | (instmem[pc] == `OPbjnz)) begin control_dependency <= 1; end
   end
 
 endmodule
