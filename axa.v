@@ -14,7 +14,7 @@
 `define MEMSIZE    [65535:0]
 `define BUFDADDR   [3:0]
 `define BUFSRCTYPE [1:0]
-`define BUFSRC     [3:0]
+`define BUFSRC     [7:0]
 `define BUFOP      [5:0]
 `define BUF16   [15:0]
 
