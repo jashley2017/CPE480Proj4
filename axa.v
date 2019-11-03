@@ -56,7 +56,7 @@
 `define OPex2   6'b111100
 
 // src_types
-`define SRC_I4   2'b01
+`define SRC_IMM   2'b01
 `define SRC_REG  2'b00
 `define SRC_ADDR 2'b10
 `define SRC_UNDO 2'b11
@@ -154,14 +154,21 @@ module processor(halt, reset, clk);
   always @(posedge clk) begin
     if(!dataDependency & !undo_enable & !control_dependency) begin
         case (instmem[pc] `IMMSIZE)
-          1: op1 <= {instmem[pc] `OP_4, 2'b00};
-          default:  if(instmem[pc] != `noOP) op1 <= instmem[pc] `OP_6;
+          1: begin
+                op1 <= {instmem[pc] `OP_4, 2'b00};
+                src1 <= instmem[pc] `SRC_8;
+                srcType1 <= `SRC_IMM;
+          end
+          default:  if(instmem[pc] != `noOP) begin
+                        op1 <= instmem[pc] `OP_6;
+                        srcType1 <= instmem[pc] `SRCTYPE;
+                        src1 <= instmem[pc] `SRC;
+                    end
                     else op1 <= `noOP;
         endcase
 
         // Set source, source type and destination address
-        src1 <= instmem[pc] `SRC;
-        srcType1 <= instmem[pc] `SRCTYPE;
+
         daddr1 <= instmem[pc] `DEST;
 
         // Special case instructions: sys, land
@@ -188,7 +195,7 @@ module processor(halt, reset, clk);
           `SRC_REG:  begin srcFull2 <= regfile[src1];end
           `SRC_ADDR: begin srcFull2 <= regfile[src1];end
           // this is the 2's compliment conversion, I am sure it does not need to be at the bit level but I really dont like bugs.
-          `SRC_I4: begin srcFull2 <= src1[3] ? {12'b111111111111, (src1 ^ 4'b1111) + 4'b0001} : {12'b000000000000, src1};end
+          `SRC_IMM: begin srcFull2 <= src1[3] ? {12'b111111111111, (src1 ^ 4'b1111) + 4'b0001} : {12'b000000000000, src1};end
         endcase
   end
 
@@ -213,7 +220,7 @@ module processor(halt, reset, clk);
     if(!undo_enable) begin
         // needed to store dest value in undobuff before write
         case (op3)
-          `OPlhi, `OPllo, `OPshr, `OPor, `OPand , `OPdup : begin
+          `STlhi, `STllo, `OPshr, `OPor, `OPand , `OPdup : begin
             while (undo_enable == 1) begin
               #1;
             end
@@ -266,12 +273,12 @@ module processor(halt, reset, clk);
       `OPbjnn: begin bjTaken = ~is_neg;  bjTarget = result4; bjSrcType = srcType4; control_dependency <= 0; end
     endcase
     if(bjTaken) begin
-        if(bjSrcType == `SRC_I4) // branch
+        if(bjSrcType == `SRC_IMM) // branch
             pc <= pc + bjTarget;
         else  // jump
             pc <= bjTarget;
         bjTaken <= 0;
-    end            
+    end
   end
 
   // UNDO STACK HANDLING
