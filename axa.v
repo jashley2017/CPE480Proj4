@@ -265,11 +265,13 @@ module processor(halt, reset, clk);
       `OPbjn: begin bjTaken =  is_neg;  bjTarget = result4; bjSrcType = srcType4; control_dependency <= 0; end
       `OPbjnn: begin bjTaken = ~is_neg;  bjTarget = result4; bjSrcType = srcType4; control_dependency <= 0; end
     endcase
-    if(bjTaken) 
+    if(bjTaken) begin
         if(bjSrcType == `SRC_I4) // branch
             pc <= pc + bjTarget;
         else  // jump
             pc <= bjTarget;
+        bjTaken <= 0;
+    end            
   end
 
   // UNDO STACK HANDLING
