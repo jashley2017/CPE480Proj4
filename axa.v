@@ -308,7 +308,7 @@ module processor(halt, reset, clk);
         (~(instmem[pc] `SRC ^ daddr3))|
         (~(instmem[pc] `SRC ^ daddr4)))) dataDependency <= 1;
 
-     if((instmem[pc] == `OPbjn) | (instmem[pc] == `OPbjnn) | (instmem[pc] == `OPbjz) | (instmem[pc] == `OPbjnz)) begin control_dependency <= 1; end
+     if((instmem[pc] `OP_6 == `OPbjn) | (instmem[pc] `OP_6 == `OPbjnn) | (instmem[pc] `OP_6 == `OPbjz) | (instmem[pc] `OP_6 == `OPbjnz)) begin control_dependency <= 1; end
   end
 
 endmodule
