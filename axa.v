@@ -203,7 +203,7 @@ module processor(halt, reset, clk);
         endcase
     end
     else begin
-      op2 <= op1
+      op2 <= op1;
       daddr2 <= daddr1;
     end
   end
