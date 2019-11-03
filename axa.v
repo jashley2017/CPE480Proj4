@@ -272,7 +272,7 @@ module processor(halt, reset, clk);
   // STAGE 5: REGISTER WRITE
   always @(posedge clk) begin
     case (op4)
-      `OPadd , `OPsub , `OPxor , `OPex  , `OProl , `OPshr , `OPor  , `OPand , `OPdup : begin
+      `OPadd , `OPsub , `OPxor , `OPex  , `OProl , `OPshr , `OPor  , `OPand , `OPdup, `STxhi, `STxlo, `STlhi, `STllo : begin
         regfile[daddr4] <= result4;
       end
       `OPbjz: begin bjTaken = is_zero; bjTarget = result4; bjSrcType = srcType4; control_dependency <=0 ; end
