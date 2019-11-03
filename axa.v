@@ -261,7 +261,9 @@ module processor(halt, reset, clk);
         endcase
 
         if(result4[15] == 1) is_neg <= 1;
+        else is_neg <= 0;
         if(result4 == 0) is_zero <= 1;
+        else is_zero <= 0;
         daddr4 <= daddr3;
         op4 <= op3;
         srcType4 <= srcType3;
