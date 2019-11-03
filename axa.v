@@ -98,6 +98,7 @@ module processor(halt, reset, clk);
   reg `BUFSRC src1;
   reg `BUFSRCTYPE srcType1;
   reg `BUFDADDR daddr1;
+  reg imm_8;
 
   // BUFFER FIELDS FOR REGISTER READ OUTPUT, MEMORY READ/WRITE INPUT
   reg `BUFOP op2;
@@ -158,11 +159,13 @@ module processor(halt, reset, clk);
                 op1 <= {instmem[pc] `OP_4, 2'b00};
                 src1 <= instmem[pc] `SRC_8;
                 srcType1 <= `SRC_IMM;
+                imm_8 <= 1;
           end
           default:  if(instmem[pc] != `noOP) begin
                         op1 <= instmem[pc] `OP_6;
                         srcType1 <= instmem[pc] `SRCTYPE;
                         src1 <= instmem[pc] `SRC;
+                        imm_8 <= 0;
                     end
                     else op1 <= `noOP;
         endcase
@@ -195,7 +198,12 @@ module processor(halt, reset, clk);
           `SRC_REG:  begin srcFull2 <= regfile[src1];end
           `SRC_ADDR: begin srcFull2 <= regfile[src1];end
           // this is the 2's compliment conversion, I am sure it does not need to be at the bit level but I really dont like bugs.
-          `SRC_IMM: begin srcFull2 <= src1[3] ? {12'b111111111111, (src1 ^ 4'b1111) + 4'b0001} : {12'b000000000000, src1};end
+          `SRC_IMM: begin
+                        if(!imm_8)
+                            srcFull2 <= src1[3] ? {12'b111111111111, (src1 ^ 4'b1111) + 4'b0001} : {12'b000000000000, src1};
+                        else
+                            srcFull2 <= src1;
+                    end
         endcase
   end
 
