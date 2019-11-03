@@ -255,7 +255,8 @@ module processor(halt, reset, clk);
             `OPshr: result4 <= destFull3 >> srcFull3;
             `OPor:  result4 <= destFull3 | srcFull3;
             `OPand: result4 <= destFull3 & srcFull3;
-            `OPdup,`OPbjz, `OPbjnz, `OPbjn, `OPbjnn : result4 <= destFull3;
+            `OPdup: result4 <= srcFull3;
+            `OPbjz, `OPbjnz, `OPbjn, `OPbjnn : result4 <= destFull3;
             `noOP: ;
             default: result4 <= destFull3;
         endcase
